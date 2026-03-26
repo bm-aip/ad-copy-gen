@@ -124,10 +124,26 @@ async function extractVideoFrames(file, frameCount = 8) {
   };
 }
 async function callClaude(system, messages, maxTokens = 8000) {
+  // Deep-clone and sanitize all image media_types before sending
+  const safeMessages = JSON.parse(JSON.stringify(messages));
+  safeMessages.forEach(msg => {
+    if (Array.isArray(msg.content)) {
+      msg.content.forEach(block => {
+        if (block.type === "image" && block.source) {
+          const t = (block.source.media_type || "").toLowerCase();
+          block.source.media_type =
+            t.includes("png")  ? "image/png"  :
+            t.includes("gif")  ? "image/gif"  :
+            t.includes("webp") ? "image/webp" :
+            "image/jpeg";
+        }
+      });
+    }
+  });
   const res = await fetch(ANTHROPIC_API, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ model: MDL, max_tokens: maxTokens, system, messages }),
+    headers: { "Content-Type": "application/json", "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
+    body: JSON.stringify({ model: MDL, max_tokens: maxTokens, system, messages: safeMessages }),
   });
   if (!res.ok) throw new Error("API " + res.status + ": " + (await res.text()).slice(0, 200));
   const d = await res.json();
